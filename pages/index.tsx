@@ -235,6 +235,13 @@ interface LunchMoneyCategory {
     archived: boolean;
 }
 
+interface LunchMoneyTag {
+    id: number;
+    name: string;
+    description: string | null;
+    archived: boolean;
+}
+
 const Home: React.FC = () => {
     const [authenticated, setAuthenticated] = useState<boolean>(false);
     const [amount, setAmount] = useState<number>(0);
@@ -271,7 +278,7 @@ const Home: React.FC = () => {
                                  // Transform categories into options for react-select
                                  .map((cat) => ({
                                      value: cat,
-                                     label: cat.name,
+                                     label: decodeEntities(cat.name),
                                  })) || [];
 
     const handleCategoryChange = (selectedOption: any) => {
@@ -311,6 +318,65 @@ const Home: React.FC = () => {
                 setCats(null);
             });
     };
+
+    const [tags, setTags] = useState<Array<LunchMoneyTag> | null>(null);
+    const [selectedTag, setSelectedTag] = useState<any>(null); // For react-select
+
+    const tagOptions = tags?.filter(tag => !tag.archived)
+                           .map((tag) => ({
+                               value: tag,
+                               label: decodeEntities(tag.name),
+                           })) || [];
+
+    const handleTagChange = (selectedOption: any) => {
+        if (selectedOption) {
+            setSelectedTag(selectedOption.value); // Store the tag object directly
+            localStorage.setItem('selectedTagId', selectedOption.value.id.toString());
+        } else {
+            clearSelectedTag(); // Call the clear function when nothing is selected
+        }
+    };
+
+    const clearSelectedTag = () => {
+        setSelectedTag(null);
+        localStorage.removeItem('selectedTagId');
+    };
+
+    const downloadTags = async (at: string) => {
+        await fetch('https://dev.lunchmoney.app/v1/tags', {
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: 'Bearer ' + at,
+            },
+            method: 'GET',
+        })
+            .then((result) => result.json())
+            .then((result: any) => {
+                setTags(result);
+            })
+            .catch(() => {
+                setError(
+                    'Something went wrong downloading tags. You might check your network connection, or your API key',
+                );
+                setTags(null);
+            });
+    };
+
+    function decodeEntities(encodedString: string) {
+        const textArea = document.createElement('textarea');
+        textArea.innerHTML = encodedString;
+        return textArea.value;
+    }
+
+    useEffect(() => {
+        const storedTagId = localStorage.getItem('selectedTagId');
+        if (storedTagId && tags) {
+            const selectedTagFromStorage = tags.find(tag => tag.id === parseInt(storedTagId, 10));
+            if (selectedTagFromStorage) {
+                setSelectedTag(selectedTagFromStorage); // Set the tag object directly
+            }
+        }
+    }, [tags]);
 
     useEffect(() => {
         // try to get localstorage
@@ -354,6 +420,7 @@ const Home: React.FC = () => {
             return;
         }
         downloadCats(accessTokenInState);
+        downloadTags(accessTokenInState);
     }, [accessTokenInState]);
 
     const addAccessTokenFromHTMLElement = async () => {
@@ -567,6 +634,39 @@ const Home: React.FC = () => {
                                         onChange={handleRecentCountChange}
                                         min="1"  // Prevent negative or zero values
                                     />
+                                </div>
+                                <div>
+                                {tags && ( // Only render when tags are loaded
+                                <>
+                                        <label htmlFor="tagsSelect">Select a Tag:</label>
+                                        <Select
+                                            id="tagsSelect"
+                                            value={selectedTag ? { value: selectedTag, label: decodeEntities(selectedTag.name) } : null} // Convert
+                                            onChange={handleTagChange}
+                                            options={tagOptions}
+                                            isSearchable={false}
+                                            placeholder="Select a tag..."
+                                            styles={{
+                                                control: (provided) => ({
+                                                    ...provided,
+                                                    padding: '6px 6px', //Adjust padding if needed
+                                                    margin: 'auto',
+                                                    color: '#404040',
+                                                    fontSize: '20px',
+                                                    backgroundColor: '#fff',
+                                                    borderRadius: '5px',
+                                                    border: '1px solid #404040',
+                                                    width: '100%',
+                                                }),
+                                            }}
+
+                                        />
+                                        {selectedTag && ( // Only show the button if a tag is selected
+                                            <TinyButton onClick={clearSelectedTag}>Clear Tag</TinyButton>
+                                        )}
+                                    </>
+
+                                )}
                                 </div>
                             </div>
                         )}
